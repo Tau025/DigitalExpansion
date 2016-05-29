@@ -3,18 +3,23 @@ package com.devtau.digitalexpansion;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
+import android.animation.FloatEvaluator;
 import android.animation.ObjectAnimator;
 import android.os.Build;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.transition.Slide;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.ImageButton;
+import android.widget.Spinner;
 
 public class HeartBeatActivity extends AppCompatActivity {
     private ImageButton ibHeart;
     private AnimatorSet animatorSet;
+    private Spinner spnFloatEvaluatorType, spnHeartBeatRate;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -25,42 +30,50 @@ public class HeartBeatActivity extends AppCompatActivity {
             getWindow().setExitTransition(new Slide(Gravity.LEFT));
         }
 
+        //подготовим лэйаут и ссылки на нужные виджеты
         setContentView(R.layout.activity_heart_beat);
         ibHeart = (ImageButton) findViewById(R.id.ibHeart);
-        MyApplication.getRefWatcher(getApplicationContext()).watch(this);
+        spnFloatEvaluatorType = (Spinner) findViewById(R.id.spnFloatEvaluatorType);
+        spnHeartBeatRate = (Spinner) findViewById(R.id.spnHeartBeatRate);
+
+        //назначим стартовое состояние виджетам
+        spnFloatEvaluatorType.setSelection(2);
+        spnHeartBeatRate.setSelection(2);
     }
 
     @Override
-    protected void onResume() {
+    protected void onResume(){
         super.onResume();
         ibHeart.postDelayed(new Runnable(){
             @Override
             public void run() {
-                animateHeartBeat(ibHeart, 70);
+                animateHeartBeat(ibHeart);
+                MyApplication.getRefWatcher(getApplicationContext()).watch(animatorSet);
             }
-        }, 700);
+        }, 200);
     }
 
-    private void animateHeartBeat(final View animatedView, int heartBeatRateBPM) {
+    private void animateHeartBeat(final View animatedView) {
         //вводные данные, определяющие анимацию сердцебиения
-        //heartBeatRateBPM = 70 ударов в минуту - это 857ms на один полный цикл анимации
-        float increaseSize = 0.15f;
-        float decreaseSize = 0.03f;
+        int heartBeatRateBPM = getHeartBeatRate();//70 ударов в минуту - это 857ms на один полный цикл анимации
+        float increaseSize = 0.4f;//0.2 ближе к реалистичности
+        float decreaseSize = 0.06f;//0.03 ближе к реалистичности
 
         //вычислим вспомогательные параметры длительности отдельных анимаций
-        int inflationLength = 70 / heartBeatRateBPM * 50;
-        int deflationLength = 70 / heartBeatRateBPM * 85;
-        int restoreSizeLength = 70 / heartBeatRateBPM * 50;
-        final int pauseLength = 70 / heartBeatRateBPM * 672;
+        int inflationLength = 150;//50 ближе к реалистичности
+        int deflationLength = 240;//85 ближе к реалистичности
+        int restoreSizeLength = 150;//50 ближе к реалистичности
+        int pauseLength = Math.round((60f / heartBeatRateBPM) * 1000) - inflationLength - deflationLength - restoreSizeLength;
 
         //подготовим отдельные элементы анимации
-        AnimatorSet inflate = createResizeAnim(animatedView, 0, increaseSize, inflationLength);
-        AnimatorSet deflate = createResizeAnim(animatedView, increaseSize, -decreaseSize, deflationLength);
-        AnimatorSet restoreSize = createResizeAnim(animatedView, -decreaseSize, 0, restoreSizeLength);
+        AnimatorSet inflate = createResizeAnim(animatedView, 0, increaseSize, inflationLength, spnFloatEvaluatorType.getSelectedItemPosition());
+        AnimatorSet deflate = createResizeAnim(animatedView, increaseSize, -decreaseSize, deflationLength, 0);
+        AnimatorSet restoreSize = createResizeAnim(animatedView, -decreaseSize, 0, restoreSizeLength, 0);
 
         //соберем агрегированную анимацию из подготовленных элементов
         animatorSet = new AnimatorSet();
         animatorSet.playSequentially(inflate, deflate, restoreSize);
+        animatorSet.setStartDelay(pauseLength);
 
         //назначим слушатель
         animatorSet.addListener(new AnimatorListenerAdapter() {
@@ -70,26 +83,80 @@ public class HeartBeatActivity extends AppCompatActivity {
             @Override
             public void onAnimationEnd(Animator animator) {
                 if (!isCanceled) {
-                    animatorSet.setStartDelay(pauseLength);
-                    animatorSet.start();
+                    //зацикливаем рекурсивным вызовом чтобы иметь возможность читать изменения спиннеров
+                    animateHeartBeat(animatedView);
                 }
             }
 
             @Override
             public void onAnimationCancel(Animator animation) {
+                Log.d(Constants.LOG_TAG, "onHeartAnimationCancel");
                 isCanceled = true;
             }
         });
         animatorSet.start();
-
-        MyApplication.getRefWatcher(getApplicationContext()).watch(animatorSet);
     }
 
-    private AnimatorSet createResizeAnim(View animatedView, float fromDeltaScale, float toDeltaScale, int duration) {
-        AnimatorSet resize = new AnimatorSet();
+    private int getHeartBeatRate() {
+        int heartBeatRateBPM = 70;
+        switch (spnHeartBeatRate.getSelectedItemPosition()) {
+            //можно было бы использовать ENUM, но это усложнит код + ENUM медленный
+            case 0: heartBeatRateBPM = 10; break;
+            case 1: heartBeatRateBPM = 30; break;
+            case 2: heartBeatRateBPM = 40; break;
+            case 3: heartBeatRateBPM = 70; break;
+            case 4: heartBeatRateBPM = 110; break;
+        }
+        return heartBeatRateBPM;
+    }
+
+    private AnimatorSet createResizeAnim(View animatedView, float fromDeltaScale, float toDeltaScale,
+                                         final int duration, final int floatEvaluatorType) {
+        //подготовим отдельные элементы анимации
         ObjectAnimator scaleUpX = ObjectAnimator.ofFloat(animatedView, "scaleX", 1 + fromDeltaScale, 1 + toDeltaScale);
         ObjectAnimator scaleUpY = ObjectAnimator.ofFloat(animatedView, "scaleY", 1 + fromDeltaScale, 1 + toDeltaScale);
-        resize.play(scaleUpX).with(scaleUpY);
+
+        //подготовим FloatEvaluator для ease-out эффекта
+        FloatEvaluator floatEvaluator = new FloatEvaluator() {
+            @Override
+            public Float evaluate(float fraction, Number startValue, Number endValue) {
+                float t = duration * fraction;
+                float b = startValue.floatValue();
+                float c = endValue.floatValue() - b;
+                return calculate(t, b, c, duration);
+            }
+
+            //больше вариантов подходящих уравнений тут http://gizma.com/easing/
+            private float calculate(float t, float b, float c, float d){
+                float result = 0;
+                switch (floatEvaluatorType) {
+                    //можно было бы использовать ENUM, но это усложнит код + ENUM медленный
+                    case 1://QUADRATIC
+                        t /= d;
+                        result = -c * t * (t - 2) + b;
+                        break;
+                    case 2://CUBIC
+                        t /= d;
+                        t--;
+                        result =  c*(t*t*t + 1) + b;
+                        break;
+                    case 3://EXPONENTIAL
+                        result = (float) (c * ( -Math.pow( 2, -10 * t/d ) + 1 ) + b);
+                        break;
+                }
+                return result;
+            }
+        };
+
+        if (floatEvaluatorType != 0) {
+            //для создания эффекта сокращающихся желудочков применим FloatEvaluator только к ординате
+            scaleUpY.setEvaluator(floatEvaluator);
+//            scaleUpY.setInterpolator(new DecelerateInterpolator());//скучно
+        }
+
+        //соберем результат из подготовленных частей
+        AnimatorSet resize = new AnimatorSet();
+        resize.playTogether(scaleUpX, scaleUpY);
         resize.setDuration(duration);
         return resize;
     }

@@ -131,7 +131,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onAnimationCancel(Animator animation) {
-                Log.d(Constants.LOG_TAG, "onAnimationCancel");
+                Log.d(Constants.LOG_TAG, "onMessageAnimationCancel");
                 isCanceled = true;
             }
         });

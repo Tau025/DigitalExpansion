@@ -1,4 +1,21 @@
 <resources>
     <string name="app_name">DigitalExpansion</string>
     <string name="heart_beat_activity">HeartBeatActivity</string>
+    <string name="evaluator">Evaluator</string>
+    <string name="heart_beat_rate">Heart beat rate</string>
+
+    <string-array name="floatEvaluatorTypes">
+        <item>none</item>
+        <item>quadratic</item>
+        <item>cubic</item>
+        <item>exponential</item>
+    </string-array>
+
+    <string-array name="heartBeatRates">
+        <item>10bpm</item>
+        <item>30bpm</item>
+        <item>40bpm</item>
+        <item>70bpm</item>
+        <item>110bpm</item>
+    </string-array>
 </resources>
