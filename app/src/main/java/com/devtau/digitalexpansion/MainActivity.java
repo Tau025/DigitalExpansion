@@ -4,6 +4,7 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.annotation.TargetApi;
 import android.app.ActivityOptions;
 import android.content.Intent;
@@ -22,6 +23,7 @@ public class MainActivity extends AppCompatActivity {
     private AnimatorSet animatorSet;
     //переменная для страховки от двойного нажатия кнопки перехода
     private boolean transitionToHBAStarted = false;
+    private float incrementalValue = 0f;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,36 +48,35 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
                 if (Build.VERSION.SDK_INT >= 21) {
-                    showViewCircular(ibMessage, 600);
+                    showViewCircular(ibMessage);
                 } else {
-                    showView(ibMessage, 600);
+                    showView(ibMessage);
                 }
             }
-        }, 200);
+        }, Constants.VIEW_SHOW_UP_DELAY);
         transitionToHBAStarted = false;
     }
 
     @TargetApi(21)
-    private void showViewCircular(View myView, long duration){
-        if (myView != null) {
-            myView.setAlpha(1f);
-            myView.setVisibility(View.VISIBLE);
-            int cx = myView.getWidth() / 2;
-            int cy = myView.getHeight() / 2;
-            float finalRadius = calculateRadius(myView);
-            Log.d(Constants.LOG_TAG, "cx: " + String.valueOf(cx) + "cy: " + String.valueOf(cy) + "finalRadius: " + String.valueOf(finalRadius));
-            Animator anim = ViewAnimationUtils.createCircularReveal(myView, cx, cy, 0, finalRadius);
-            anim.setDuration(duration);
+    private void showViewCircular(View animatedView){
+        if (animatedView != null) {
+            animatedView.setAlpha(1f);
+            animatedView.setVisibility(View.VISIBLE);
+            int cx = animatedView.getWidth() / 2;
+            int cy = animatedView.getHeight() / 2;
+            float finalRadius = calculateRadius(animatedView);
+            Animator anim = ViewAnimationUtils.createCircularReveal(animatedView, cx, cy, 0, finalRadius);
+            anim.setDuration(Constants.CIRCLE_ANIMATION_LENGTH);
             anim.start();
         }
     }
 
-    private void showView(View myView, long duration){
-        if (myView != null) {
-            myView.setAlpha(1f);
-            myView.setVisibility(View.VISIBLE);
-            ObjectAnimator fadeIn = ObjectAnimator.ofFloat(myView, "alpha", 0, 1f);
-            fadeIn.setDuration(duration);
+    private void showView(View animatedView){
+        if (animatedView != null) {
+            animatedView.setAlpha(1f);
+            animatedView.setVisibility(View.VISIBLE);
+            ObjectAnimator fadeIn = ObjectAnimator.ofFloat(animatedView, "alpha", 0, 1f);
+            fadeIn.setDuration(Constants.CIRCLE_ANIMATION_LENGTH);
             fadeIn.start();
         }
     }
@@ -87,20 +88,31 @@ public class MainActivity extends AppCompatActivity {
     public void onMsgIconClick(View view) {
         int viewRadius = Math.round(calculateRadius(view));
         int distance = (view.getLeft() + view.getRight()) / 2 + viewRadius;
-        animate(view, 600, 0, -distance, 0, -270, 1, 0);
+        animate(view, Constants.SLIDE_ANIMATION_DURATION, 0, -distance, 0, Constants.ROTATION_ANIMATION_TARGET_ANGLE, 1, 0);
     }
 
     private void animate(final View animatedView, int duration, int fromXDelta, int toXDelta,
                          float fromAngle, final float toAngle,
                          float fromTransparency, final float toTransparency) {
         //подготовим отдельные элементы анимации
-        ObjectAnimator moverX = ObjectAnimator.ofFloat(animatedView, "translationX", (float) fromXDelta, (float) toXDelta);
+        ValueAnimator mover = ObjectAnimator.ofFloat(animatedView, "translationX", (float) fromXDelta, (float) toXDelta);
+        final int translationLength = toXDelta - fromXDelta;
+        mover.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                float value = (Float) (animation.getAnimatedValue());
+                animatedView.setTranslationX(value + incrementalValue);
+                animatedView.setTranslationY(-(float) (Constants.SINUSOID_AMPLITUDE *
+                        Math.sin(value / translationLength * Math.PI * Constants.SINUSOID_LENGTH)));
+                incrementalValue += Constants.SLIDE_ANIMATION_STEP;
+            }
+        });
         ObjectAnimator rotate = ObjectAnimator.ofFloat(animatedView, "rotation", fromAngle, toAngle);
         ObjectAnimator fadeOut = ObjectAnimator.ofFloat(animatedView, "alpha", fromTransparency, toTransparency);
 
         //соберем агрегированную анимацию из подготовленных элементов
         animatorSet = new AnimatorSet();
-        animatorSet.play(moverX).with(rotate).with(fadeOut);
+        animatorSet.play(mover).with(rotate).with(fadeOut);
         animatorSet.setDuration(duration);
 
         //назначим слушатель

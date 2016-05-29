@@ -50,25 +50,23 @@ public class HeartBeatActivity extends AppCompatActivity {
                 animateHeartBeat(ibHeart);
                 MyApplication.getRefWatcher(getApplicationContext()).watch(animatorSet);
             }
-        }, 200);
+        }, Constants.VIEW_SHOW_UP_DELAY);
     }
 
     private void animateHeartBeat(final View animatedView) {
-        //вводные данные, определяющие анимацию сердцебиения
         int heartBeatRateBPM = getHeartBeatRate();//70 ударов в минуту - это 857ms на один полный цикл анимации
-        float increaseSize = 0.4f;//0.2 ближе к реалистичности
-        float decreaseSize = 0.06f;//0.03 ближе к реалистичности
 
         //вычислим вспомогательные параметры длительности отдельных анимаций
-        int inflationLength = 150;//50 ближе к реалистичности
-        int deflationLength = 240;//85 ближе к реалистичности
-        int restoreSizeLength = 150;//50 ближе к реалистичности
-        int pauseLength = Math.round((60f / heartBeatRateBPM) * 1000) - inflationLength - deflationLength - restoreSizeLength;
+        int pauseLength = Math.round((60f / heartBeatRateBPM) * 1000) -
+                Constants.HEART_INFLATION_LENGTH - Constants.HEART_DEFLATION_LENGTH - Constants.HEART_RESTORE_LENGTH;
 
         //подготовим отдельные элементы анимации
-        AnimatorSet inflate = createResizeAnim(animatedView, 0, increaseSize, inflationLength, spnFloatEvaluatorType.getSelectedItemPosition());
-        AnimatorSet deflate = createResizeAnim(animatedView, increaseSize, -decreaseSize, deflationLength, 0);
-        AnimatorSet restoreSize = createResizeAnim(animatedView, -decreaseSize, 0, restoreSizeLength, 0);
+        AnimatorSet inflate = createResizeAnim(animatedView, 0, Constants.HEART_INCREASE_TO,
+                Constants.HEART_INFLATION_LENGTH, spnFloatEvaluatorType.getSelectedItemPosition());
+        AnimatorSet deflate = createResizeAnim(animatedView, Constants.HEART_INCREASE_TO, Constants.HEART_DECREASE_TO,
+                Constants.HEART_DEFLATION_LENGTH, 0);
+        AnimatorSet restoreSize = createResizeAnim(animatedView, Constants.HEART_DECREASE_TO, 0,
+                Constants.HEART_RESTORE_LENGTH, 0);
 
         //соберем агрегированную анимацию из подготовленных элементов
         animatorSet = new AnimatorSet();
