@@ -56,6 +56,6 @@
         android:id="@+id/ibHeart"
         android:layout_centerVertical="true"
         android:layout_centerHorizontal="true"
-        android:background="@mipmap/ic_favorite_black_48dp"
+        android:background="@drawable/heart"
         android:onClick="onHeartIconClick" />
 </RelativeLayout>
