@@ -1,4 +1,5 @@
 package com.devtau.digitalexpansion;
+
 import android.app.Application;
 import android.content.Context;
 import com.squareup.leakcanary.LeakCanary;
