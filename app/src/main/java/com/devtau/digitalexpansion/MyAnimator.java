@@ -1,17 +1,142 @@
 package com.devtau.digitalexpansion;
 
+import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.FloatEvaluator;
 import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
+import android.annotation.TargetApi;
+import android.app.Activity;
+import android.app.ActivityOptions;
+import android.content.Intent;
+import android.os.Build;
 import android.util.Log;
 import android.view.View;
+import android.view.ViewAnimationUtils;
 import android.widget.Spinner;
 /**
  * Created by TAU on 30.05.2016.
  */
 public class MyAnimator {
     private AnimatorSet animatorSet;
+    //переменная для страховки от двойного нажатия кнопки перехода
+    private boolean transitionToHBAStarted = false;
+    private float incrementalValue = 0f;
+
+    public void animateShowUpCircularOrFadeIn(View animatedView) {
+        if (Build.VERSION.SDK_INT >= 21) {
+            showViewCircular(animatedView);
+        } else {
+            showView(animatedView);
+        }
+    }
+
+    @TargetApi(21)
+    private void showViewCircular(View animatedView){
+        if (animatedView != null) {
+            animatedView.setAlpha(1f);
+            animatedView.setVisibility(View.VISIBLE);
+            int cx = animatedView.getWidth() / 2;
+            int cy = animatedView.getHeight() / 2;
+            float finalRadius = calculateRadius(animatedView);
+            Animator anim = ViewAnimationUtils.createCircularReveal(animatedView, cx, cy, 0, finalRadius);
+            anim.setDuration(Constants.CIRCLE_ANIMATION_LENGTH);
+            anim.start();
+        }
+    }
+
+    private float calculateRadius(View animatedView) {
+        return (float) Math.sqrt(animatedView.getWidth() * animatedView.getWidth()
+                + animatedView.getHeight() * animatedView.getHeight()) / 2;
+    }
+
+    private void showView(View animatedView){
+        if (animatedView != null) {
+            animatedView.setAlpha(1f);
+            animatedView.setVisibility(View.VISIBLE);
+            ObjectAnimator fadeIn = ObjectAnimator.ofFloat(animatedView, "alpha", 0, 1f);
+            fadeIn.setDuration(Constants.CIRCLE_ANIMATION_LENGTH);
+            fadeIn.start();
+        }
+    }
+
+    public void animateComplexSlide(final View animatedView, int duration,
+                                     float fromAngle, final float toAngle,
+                                     float fromTransparency, final float toTransparency, final Activity activity) {
+        //вычислим смещение animatedView по абсциссе
+        int viewRadius = Math.round(calculateRadius(animatedView));
+        final int toXDelta = -((animatedView.getLeft() + animatedView.getRight()) / 2 + viewRadius);//+ вправо - влево
+
+        //подготовим отдельные элементы анимации
+        ValueAnimator mover = ObjectAnimator.ofFloat(animatedView, "translationX", 0, (float) toXDelta);
+        //назначим слушатель, рассчитывающий и применяющий скольжение по траектории
+        mover.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                float value = (Float) (animation.getAnimatedValue());
+                animatedView.setTranslationX(value + incrementalValue);
+                animatedView.setTranslationY(-(float) (Constants.SINUSOID_AMPLITUDE *
+                        Math.sin(value / toXDelta * Math.PI * Constants.SINUSOID_LENGTH)));
+                incrementalValue += Constants.SLIDE_ANIMATION_STEP;
+            }
+        });
+        ObjectAnimator rotate = ObjectAnimator.ofFloat(animatedView, "rotation", fromAngle, toAngle);
+        ObjectAnimator fadeOut = ObjectAnimator.ofFloat(animatedView, "alpha", fromTransparency, toTransparency);
+
+        //соберем агрегированную анимацию из подготовленных элементов
+        animatorSet = new AnimatorSet();
+        animatorSet.play(mover).with(rotate).with(fadeOut);
+        animatorSet.setDuration(duration);
+
+        //назначим слушатель для агрегированной анимации
+        animatorSet.addListener(new AnimatorListenerAdapter() {
+            //флаг isCanceled нужен, т.к. даже прервав анимацию вызовом animatorSet.cancel()
+            //мы все равно увидим вызов onAnimationEnd
+            private boolean isCanceled = false;
+            @Override
+            public void onAnimationEnd(Animator animator) {
+                Log.d(Constants.LOG_TAG, "onSlideAnimationEnd");
+
+                //необходимо для корректного завершения анимации перемещения
+                animator = ObjectAnimator.ofFloat(animatedView, "translationX", 0.0f, 0.0f);
+                animator.setDuration(1);
+                animator.start();
+
+                //установим конечные значения положения и прозрачности после выполнения анимации
+                animatedView.setAlpha(toTransparency);
+                animatedView.setVisibility(View.INVISIBLE);
+                animatedView.setRotation(0);
+
+                //запускаем вторую активность только если анимацию не прервали и со страховкой от трясущихся рук
+                if (!isCanceled && !transitionToHBAStarted) {
+                    startSecondActivity(activity);
+                    transitionToHBAStarted = true;
+                }
+            }
+
+            @Override
+            public void onAnimationCancel(Animator animation) {
+                Log.d(Constants.LOG_TAG, "onSlideAnimationCancel");
+                isCanceled = true;
+            }
+        });
+        animatorSet.start();
+    }
+
+    private void startSecondActivity(Activity activity) {
+        Intent intent = new Intent(activity, HeartBeatActivity.class);
+        //вызовем анимированный переход ко второй активности, если это позволяет апилвл устройства
+        if (Build.VERSION.SDK_INT >= 21) {
+            activity.startActivity(intent, ActivityOptions.makeSceneTransitionAnimation(activity).toBundle());
+        } else {
+            activity.startActivity(intent);
+        }
+    }
+
+    public void setTransitionToHBAStarted(boolean transitionToHBAStarted) {
+        this.transitionToHBAStarted = transitionToHBAStarted;
+    }
 
     public void animateHeartBeat(final View animatedView, final Spinner spnFloatEvaluatorType, final Spinner spnHeartBeatRate) {
         int heartBeatRateBPM = getHeartBeatRate(spnHeartBeatRate);//70 ударов в минуту - это 857ms на один полный цикл анимации
